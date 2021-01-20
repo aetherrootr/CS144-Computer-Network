@@ -126,3 +126,35 @@ Connection closed by foreign host.
 ![](img-lab0\lab0-img-3.png)
 
 ####   Listening and connecting
+
+建立一个简单的连接传递字符串。
+
+Server
+
+```
+cs144@cs144vm:~$ netcat  -v -l -p 9090  #监听9090端口
+Listening on [0.0.0.0] (family 0, port 9090)
+Connection from localhost 47718 received!
+test  			#2
+quit             #4
+^C               #5
+cs144@cs144vm:~$
+```
+
+Client
+
+```
+cs144@cs144vm:~$ telnet localhost 9090
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+test          #1
+quit          #3
+Connection closed by foreign host.        #6
+cs144@cs144vm:~$
+```
+
+---
+
+### Writing a network program using an OS stream socket
+
