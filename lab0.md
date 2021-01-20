@@ -77,11 +77,11 @@ Connection closed by foreign host.
 
 首先需要到QQ邮箱中开启stmp服务。
 
-![](D:\Note\CS144 Computer Network\img-lab0\lab0-img-2.png)
+![](img-lab0\lab0-img-2.png)
 
 由于QQ邮箱的安全限制，所以你需要获取stmp的专属访问密码。
 
-![](D:\Note\CS144 Computer Network\img-lab0\lab0-img-1.png)
+![](img-lab0\lab0-img-1.png)
 
 我们在用命令行登陆邮箱时，需要提供邮箱和密码的base64编码后的字符串。
 
@@ -123,6 +123,6 @@ Connection closed by foreign host.
 
 之后你的QQ邮箱就会收到一封这样的邮件，表示实验成功了。
 
-![](D:\Note\CS144 Computer Network\img-lab0\lab0-img-3.png)
+![](img-lab0\lab0-img-3.png)
 
 ####   Listening and connecting
