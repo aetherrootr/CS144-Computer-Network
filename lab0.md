@@ -253,18 +253,53 @@ void get_URL(const string &host, const string &path) {
 
 ### An in-memory reliable byte stream
 
-到目前为止，您已经了解了可靠字节流的抽象如何在Internet上进行通信时有用，即使Internet本身仅提供“尽力而为”（不可靠）数据报的服务。结束本周的实验 ，您将在单个计算机的内存中实现一个提供此抽象的对象。 （您可能在CS 110中做了类似的操作。）字节被写入“输入”端，并且可以以相同的顺序从“输出”端读取。 字节流是有限的：编写器可以结束输入，然后不能再写入任何字节。 当读取器读取到流的末尾时，它将到达“ EOF”（文件末尾），无法再读取任何字节。您的字节流也将受到流控制以限制其在任何给定时间的内存消耗。 该对象使用特定的“容量”进行初始化：在任何给定点它愿意存储在其自己的内存中的最大字节数。 字节流将限制写入器在任何给定时刻可以写入的数量，以确保该流不超过其存储容量。 当读取器读取字节并将其从流中排出时，允许写入器写入更多字节。 您的字节流供单线程使用-您不必担心并发写入器/读取器，锁定或竞争条件。
+到目前为止，您已经了解了*可靠字节流的抽象类*如何在Internet上进行通信时起到作用，即使Internet本身仅提供“尽力而为”（不可靠）数据报的服务。
 
-需要明确的是：字节流是有限的，但是在编写者结束输入并完成流之前，字节流几乎可以任意长。 您的实现必须能够处理比容量更长的流。 容量限制给定点在内存中保留（写入但尚未读取）的字节数，但不限制流的长度。 一个容量只有一个字节的对象仍然可以承载长达TB和TB的流，只要写入器一次保持写入一个字节，并且读取器在允许写入器写入下一个字节之前读取每个字节即可。 界面看起来像是作者
+本周的最后一个Lab ，您将在单个计算机的内存中给出一个抽象对象的实现。 （您可能在CS 110中做了类似的操作。）字节被写入“输入”端，并且可以以相同的顺序从“输出”端读取。 字节流是有限的：编写器可以结束输入，然后不能再写入任何字节。 当读取器读取到流的末尾时，它将到达“ EOF”（文件末尾），无法再读取任何字节。
 
+您的字节流也将受到*流量控制*以限制其在任何给定时间的内存消耗。 该对象使用特定的“容量”进行初始化：在任何给定点它愿意存储在其自己的内存中的最大字节数。 字节流将限制写入器在任何给定时刻可以写入的数量，以确保该流不超过其存储容量。 当读取器读取字节并将其从流中排出时，允许写入器写入更多字节。 您的字节流供单线程使用-您不必担心因为并发导致的读者/写者问题，锁定或竞争条件。
+
+需要明确的是：字节流是有限的，但是在编写者结束输入并完成流之前，字节流几乎可以任意长。 您的实现必须能够处理比容量更长的流。 容量限制给定点在内存中保留（写入但尚未读取）的字节数，但不限制流的长度。 一个容量只有一个字节的对象仍然可以承载长达数兆字节和数兆字节的流，只要写入器一次保持写入一个字节，并且读取器在允许写入器写入下一个字节之前读取每个字节即可。
+
+ 写者端接口：
+
+```C++
+// Write a string of bytes into the stream. Write as many
+// as will fit, and return the number of bytes written.
+size_t write(const std::string &data);
+
+// Returns the number of additional bytes that the stream has space for
+size_t remaining_capacity() const;
+
+// Signal that the byte stream has reached its ending
+void end_input();
+
+// Indicate that the stream suffered an error
+void set_error();
 ```
-// Write a string of bytes into the stream. Write as many// as will fit, and return the number of bytes written.size_t write(const std::string &data);// Returns the number of additional bytes that the stream has space forsize_t remaining_capacity() const;// Signal that the byte stream has reached its endingvoid end_input();// Indicate that the stream suffered an errorvoid set_error();
+
+读者端接口：
+
+```c++
+// Peek at next "len" bytes of the stream
+std::string peek_output(const size_t len) const;
+
+// Remove ``len'' bytes from the buffer
+void pop_output(const size_t len);
+
+// Read (i.e., copy and then pop) the next "len" bytes of the stream
+std::string read(const size_t len);
+
+bool input_ended() const;	 // `true` if the stream input has ended
+bool eof() const;			// `true` if the output has reached the ending
+bool error() const;			// `true` if the stream has suffered an error
+size_t buffer_size() const; // the maximum amount that can currently be peeked/read
+bool buffer_empty() const; // `true` if the buffer is empty
+
+size_t bytes_written() const;	// Total number of bytes written
+size_t bytes_read() const;	// Total number of bytes popped
 ```
 
-这是读者的界面：
+请打开libsponge / bytestream.hh 和 libsponge / bytestream.cc文件，并实现一个提供此接口的对象。 在开发字节流实现时，可以使用`make check_lab0`运行自动化测试。
 
-```
-// Peek at next "len" bytes of the streamstd::string peek_output(const size_t len) const;// Remove ``len'' bytes from the buffervoid pop_output(const size_t len);// Read (i.e., copy and then pop) the next "len" bytes of the streamstd::string read(const size_t len);bool input_ended() const;// `true` if the stream input has endedbool eof() const;// `true` if the output has reached the endingbool error() const;// `true` if the stream has suffered an errorsize_t buffer_size() const;// the maximum amount that can currently be peeked/readbool buffer_empty() const;// `true` if the buffer is emptysize_t bytes_written() const;// Total number of bytes writtensize_t bytes_read() const;// Total number of bytes popped
-```
-
-请打开libsponge / bytestream.hhandlibsponge / bytestream.cc文件，并至少打开264个字节，在此类中，我们将其视为实质上任意长的CS144：计算机网络秋季介绍2020实现一个提供此接口的对象。 在开发字节流实现时，可以使用make checklab0运行自动化测试。接下来是什么？在接下来的四个星期中，您将实现一个系统来提供相同的接口，不再存在于内存中，而是通过 不可靠的网络。 这是TransmissionControl协议。
+接下来我们要做什么？在接下来的四个星期中，您将实现一个系统来提供相同的接口，不再存在于内存中，而是通过不可靠的网络。 这是传输控制协议（Transmission Control Protocol）。
