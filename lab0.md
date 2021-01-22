@@ -172,6 +172,8 @@ cs144@cs144vm:~$
 
 跟着给的流程执行就好，建议把项目放在一个共享文件夹中，这样可以在外部用自己喜欢的编辑器或IDE编辑。
 
+这里有一个坑需要注意，git clone请在Linux端执行，在windows端执行有可能导致测试时出现问题！！！！
+
 #### Modern C++: mostly safe but still fast and low-level
 
 Lab作业将以当代的C ++风格完成，该风格使用最新（2011年）的功能来尽可能安全地进行编程。 这可能与您过去编写C ++的方式不同。 有关此样式的参考，请参见C ++ 核心指南（http://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines）。
@@ -205,5 +207,64 @@ Lab作业将以当代的C ++风格完成，该风格使用最新（2011年）的
 
 
 
-
 使用Git：使用Git（版本控制）存储库来分发Lab -- 以此记录变更的方式，检查版本以帮助调试以及跟踪源代码的来源。**请在工作时进行频繁的小型提交，并使用提交消息标识更改的内容和原因。柏拉图式的理想是每次提交都应编译并朝着稳定的方向移动 越来越多的测试通过。** 进行小的“语义”提交有助于调试（调试每个提交都可以编译，并且消息描述了该提交确实很明确的事情，调试起来要容易得多），并且通过记录随着时间的推移稳步前进而保护您免受欺骗的侵害，这是一项有用的技能， 在包括软件开发在内的任何职业中提供帮助。 评分员将阅读您的提交信息，以了解您如何开发Lab解决方案。 如果您还没有学会如何使用Git，请在CS144办公时间寻求帮助或咨询教程（例如https://guides.github.com/introduction/git-handbook）。 最后，欢迎您将代码存储在GitHub，GitLab，Bitbucket等上的私有存储库中，但是请确保您的代码不可公开访问。
+
+#### Reading the Sponge documentation
+
+阅读相关的文档和代码没啥好说的。
+
+#### Writing webget
+
+coding，实现一个socket通信，按照流程测试即可。
+
+```C++
+void get_URL(const string &host, const string &path) {
+    // Your code here.
+
+    // You will need to connect to the "http" service on
+    // the computer whose name is in the "host" string,
+    // then request the URL path given in the "path" string.
+
+    // Then you'll need to print out everything the server sends back,
+    // (not just one call to read() -- everything) until you reach
+    // the "eof" (end of file).
+
+    // cerr << "Function called: get_URL(" << host << ", " << path << ").\n";
+    // cerr << "Warning: get_URL() has not been implemented yet.\n";
+
+    TCPSocket _Socket;
+
+    _Socket.connect(Address(host, "http"));//建立连接
+    _Socket.write("GET " + path + " HTTP/1.1\r\nHost: " + host + "\r\n\r\n");//传递命令
+
+    _Socket.shutdown(SHUT_WR);//断开连接
+
+    while (!_Socket.eof()) {//输出内容
+        cout << _Socket.read();
+    }
+
+    _Socket.close();//关闭连接
+
+    return;
+}
+```
+
+---
+
+### An in-memory reliable byte stream
+
+到目前为止，您已经了解了可靠字节流的抽象如何在Internet上进行通信时有用，即使Internet本身仅提供“尽力而为”（不可靠）数据报的服务。结束本周的实验 ，您将在单个计算机的内存中实现一个提供此抽象的对象。 （您可能在CS 110中做了类似的操作。）字节被写入“输入”端，并且可以以相同的顺序从“输出”端读取。 字节流是有限的：编写器可以结束输入，然后不能再写入任何字节。 当读取器读取到流的末尾时，它将到达“ EOF”（文件末尾），无法再读取任何字节。您的字节流也将受到流控制以限制其在任何给定时间的内存消耗。 该对象使用特定的“容量”进行初始化：在任何给定点它愿意存储在其自己的内存中的最大字节数。 字节流将限制写入器在任何给定时刻可以写入的数量，以确保该流不超过其存储容量。 当读取器读取字节并将其从流中排出时，允许写入器写入更多字节。 您的字节流供单线程使用-您不必担心并发写入器/读取器，锁定或竞争条件。
+
+需要明确的是：字节流是有限的，但是在编写者结束输入并完成流之前，字节流几乎可以任意长。 您的实现必须能够处理比容量更长的流。 容量限制给定点在内存中保留（写入但尚未读取）的字节数，但不限制流的长度。 一个容量只有一个字节的对象仍然可以承载长达TB和TB的流，只要写入器一次保持写入一个字节，并且读取器在允许写入器写入下一个字节之前读取每个字节即可。 界面看起来像是作者
+
+```
+// Write a string of bytes into the stream. Write as many// as will fit, and return the number of bytes written.size_t write(const std::string &data);// Returns the number of additional bytes that the stream has space forsize_t remaining_capacity() const;// Signal that the byte stream has reached its endingvoid end_input();// Indicate that the stream suffered an errorvoid set_error();
+```
+
+这是读者的界面：
+
+```
+// Peek at next "len" bytes of the streamstd::string peek_output(const size_t len) const;// Remove ``len'' bytes from the buffervoid pop_output(const size_t len);// Read (i.e., copy and then pop) the next "len" bytes of the streamstd::string read(const size_t len);bool input_ended() const;// `true` if the stream input has endedbool eof() const;// `true` if the output has reached the endingbool error() const;// `true` if the stream has suffered an errorsize_t buffer_size() const;// the maximum amount that can currently be peeked/readbool buffer_empty() const;// `true` if the buffer is emptysize_t bytes_written() const;// Total number of bytes writtensize_t bytes_read() const;// Total number of bytes popped
+```
+
+请打开libsponge / bytestream.hhandlibsponge / bytestream.cc文件，并至少打开264个字节，在此类中，我们将其视为实质上任意长的CS144：计算机网络秋季介绍2020实现一个提供此接口的对象。 在开发字节流实现时，可以使用make checklab0运行自动化测试。接下来是什么？在接下来的四个星期中，您将实现一个系统来提供相同的接口，不再存在于内存中，而是通过 不可靠的网络。 这是TransmissionControl协议。
