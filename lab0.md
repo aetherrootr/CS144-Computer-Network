@@ -266,15 +266,20 @@ void get_URL(const string &host, const string &path) {
 ```C++
 // Write a string of bytes into the stream. Write as many
 // as will fit, and return the number of bytes written.
+//将一串字节写尽可能多的写入流中。 
+//将适合，并返回写入的字节数。
 size_t write(const std::string &data);
 
 // Returns the number of additional bytes that the stream has space for
+//返回流中有空间的其他字节数
 size_t remaining_capacity() const;
 
 // Signal that the byte stream has reached its ending
+//表示字节流已到达结尾
 void end_input();
 
 // Indicate that the stream suffered an error
+//指示流遇到错误
 void set_error();
 ```
 
@@ -282,24 +287,46 @@ void set_error();
 
 ```c++
 // Peek at next "len" bytes of the stream
+//在流的下一个“ len”字节处 peek
 std::string peek_output(const size_t len) const;
 
 // Remove ``len'' bytes from the buffer
+//从缓冲区中删除``len''字节
 void pop_output(const size_t len);
 
 // Read (i.e., copy and then pop) the next "len" bytes of the stream
+//读取（即复制然后弹出）流的下一个“ len”字节
 std::string read(const size_t len);
 
 bool input_ended() const;	 // `true` if the stream input has ended
+//如果流输入已结束，则为“ true”
 bool eof() const;			// `true` if the output has reached the ending
+//如果输出已到达末尾，则为“ true”
 bool error() const;			// `true` if the stream has suffered an error
+//如果流发生错误，则为“ true”
 size_t buffer_size() const; // the maximum amount that can currently be peeked/read
+//当前可以浏览/读取的最大数量
 bool buffer_empty() const; // `true` if the buffer is empty
-
+//如果缓冲区为空，则为“ true”
 size_t bytes_written() const;	// Total number of bytes written
+//写入的总字节数
 size_t bytes_read() const;	// Total number of bytes popped
+//弹出的总字节数
 ```
 
 请打开libsponge / bytestream.hh 和 libsponge / bytestream.cc文件，并实现一个提供此接口的对象。 在开发字节流实现时，可以使用`make check_lab0`运行自动化测试。
 
 接下来我们要做什么？在接下来的四个星期中，您将实现一个系统来提供相同的接口，不再存在于内存中，而是通过不可靠的网络。 这是传输控制协议（Transmission Control Protocol）。
+
+bytestream.hh
+
+```
+
+```
+
+bytestream.cc
+
+```
+
+```
+
