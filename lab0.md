@@ -413,7 +413,6 @@ class ByteStream {
 };
 
 #endif  // SPONGE_LIBSPONGE_BYTE_STREAM_HH
-
 ```
 
 bytestream.cc
@@ -437,38 +436,45 @@ ByteStream::ByteStream(const size_t capacity)
     : _buffer(), _capacity(capacity), _end_input(false), _byte_read(0), _byte_writte(0) {}
 
 size_t ByteStream::write(const string &data) {
+    if (_end_input) {
+        _error = true;
+        return 0;
+    }
+
     size_t _length = data.length();
 
     if (_length + _buffer.size() > _capacity) {
         _length = _capacity - _buffer.size();
     }
 
-    for (size_t i = 0; i < _length; i++) {
-        _buffer.push_back(data[i]);
-        _byte_writte++;
-    }
+    copy(data.begin(), data.begin() + _length,  back_inserter(_buffer));
+    _byte_writte += _length;
 
     return _length;
 }
 
 //! \param[in] len bytes will be copied from the output side of the buffer
 string ByteStream::peek_output(const size_t len) const {
+    if (_buffer.size() <= 0) {
+        return "";
+    }
+
     size_t _length = len;
     if (_length > _buffer.size()) {
         _length = _buffer.size();
     }
 
-    string result = {};
-
-    for (size_t i = 0; i < _length; ++i) {
-        result = result + _buffer.at(i);
-    }
+    string result(_buffer.begin(), _buffer.begin() + _length);
 
     return result;
 }
 
 //! \param[in] len bytes will be removed from the output side of the buffer
 void ByteStream::pop_output(const size_t len) {
+	 if (_buffer.size() <= 0) {
+        return;
+    }
+    
     size_t _length = len;
     if (_length > _buffer.size()) {
         _length = _buffer.size();
