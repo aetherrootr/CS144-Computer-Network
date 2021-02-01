@@ -107,3 +107,151 @@ bool empty() const;
 
 ### 解决思路
 
+这个lab需要我们实现一个流重组器。数据在网络中传播会被分割成若干个不同大小的数据包，由于网络的不可靠性，数据包到达的时间是不可控的，我们需要实现流重组器模块把这些数据包恢复成原来的顺序（这里不考虑丢包带来的影响）。
+
+我们将受到一堆字节片段，这些片段将包含该数据包在数据中开始的位置，该数据包包含的数据是否为数据的最后一段，以及该数据包所包含的信息。我们可以将这个问题抽象为给定若干个字符串片段和它们在字符串中开始的位置，输出一个完整有序的字符串。我们还将面临字符串乱序，重复和重叠的情况，已经一些其它的极端情况，例如超出缓存区的大小，我们需要如何处理。
+
+首先我们显然可以认为重复是一种特殊的重叠情况，从而减少我们讨论的成本，降低代码的复杂程度。然后我们也可以很容易想到每次我们需要重排字符串片段，只需要选取当前首位置最小的字符串片段即可，因此我们很容易想到使用小根堆来完成这个功能，我们遵循文档中的要求使用”现代C++“的要求可以使用`std::priority_queue<>`来达到堆的效果。我们只需要每次从堆顶取出一个字符串片段，判断这个片段的开头位置与当前已经排好序的位置关系，即可知道当前是否可以加入缓冲区(这部分功能在Lab0已经实现)。
+
+stream_reassembler.hh
+
+```c++
+#ifndef SPONGE_LIBSPONGE_STREAM_REASSEMBLER_HH
+#define SPONGE_LIBSPONGE_STREAM_REASSEMBLER_HH
+
+#include "byte_stream.hh"
+
+#include <cstdint>
+#include <queue>
+#include <string>
+
+//! \brief A class that assembles a series of excerpts from a byte stream (possibly out of order,
+//! possibly overlapping) into an in-order byte stream.
+class StreamReassembler {
+  private:
+    // Your code here -- add private members as necessary.
+
+    struct DataBlock {
+        std::string data;
+        size_t index;
+        bool eof;
+
+        bool operator<(const DataBlock &rhs) const { return index > rhs.index; }
+    };
+
+    ByteStream _output;  //!< The reassembled in-order byte stream
+    size_t _capacity;    //!< The maximum number of bytes
+    size_t _ok_pos;
+    size_t _max_pos;
+    bool _eof;
+
+    std::priority_queue<DataBlock> BlockHeap;
+
+  public:
+    //! \brief Construct a `StreamReassembler` that will store up to `capacity` bytes.
+    //! \note This capacity limits both the bytes that have been reassembled,
+    //! and those that have not yet been reassembled.
+    StreamReassembler(const size_t capacity);
+
+    //! \brief Receive a substring and write any newly contiguous bytes into the stream.
+    //!
+    //! The StreamReassembler will stay within the memory limits of the `capacity`.
+    //! Bytes that would exceed the capacity are silently discarded.
+    //!
+    //! \param data the substring
+    //! \param index indicates the index (place in sequence) of the first byte in `data`
+    //! \param eof the last byte of `data` will be the last byte in the entire stream
+    void push_substring(const std::string &data, const uint64_t index, const bool eof);
+
+    //! \name Access the reassembled byte stream
+    //!@{
+    const ByteStream &stream_out() const { return _output; }
+    ByteStream &stream_out() { return _output; }
+    //!@}
+
+    //! The number of bytes in the substrings stored but not yet reassembled
+    //!
+    //! \note If the byte at a particular index has been pushed more than once, it
+    //! should only be counted once for the purpose of this function.
+    size_t unassembled_bytes() const;
+
+    //! \brief Is the internal state empty (other than the output stream)?
+    //! \returns `true` if no substrings are waiting to be assembled
+    bool empty() const;
+};
+
+#endif  // SPONGE_LIBSPONGE_STREAM_REASSEMBLER_HH
+```
+
+stream_reassembler.cc
+
+```c++
+#include "stream_reassembler.hh"
+
+// Dummy implementation of a stream reassembler.
+
+// For Lab 1, please replace with a real implementation that passes the
+// automated checks run by `make check_lab1`.
+
+// You will need to add private members to the class declaration in `stream_reassembler.hh`
+
+template <typename... Targs>
+void DUMMY_CODE(Targs &&... /* unused */) {}
+
+using namespace std;
+
+StreamReassembler::StreamReassembler(const size_t capacity)
+    : _output(capacity), _capacity(capacity), _ok_pos(0), _max_pos(0), _eof(false), BlockHeap() {}
+
+//! \details This function accepts a substring (aka a segment) of bytes,
+//! possibly out-of-order, from the logical stream, and assembles any newly
+//! contiguous substrings and writes them into the output stream in order.
+void StreamReassembler::push_substring(const string &data, const size_t index, const bool eof) {
+    if (_eof)
+        return;
+
+    _max_pos = max(_max_pos, index + data.length());
+
+    DataBlock _data_block = DataBlock{data, index, eof};
+    BlockHeap.push(_data_block);
+
+    while (!BlockHeap.empty() && !_eof) {
+        DataBlock _block = BlockHeap.top();
+
+        if (_block.index <= _ok_pos) {
+            int _ignore_length = _block.data.length() + _block.index - _ok_pos;
+
+            if (_output.remaining_capacity() && _ignore_length > 0) {
+                _ok_pos -= _output.buffer_size();
+                _output.write(_block.data.substr(_block.data.length() - _ignore_length));
+                _ok_pos += _output.buffer_size();
+            }
+        } else {
+            break;
+        }
+
+        BlockHeap.pop();
+        if (_block.eof && _ok_pos - _block.index + _block.data.length() <= _capacity) {
+            _eof = true;
+            _output.end_input();
+        }
+    }
+}
+
+size_t StreamReassembler::unassembled_bytes() const { return _ok_pos == 0 ? (_max_pos - 1) : (_max_pos - _ok_pos); }
+
+bool StreamReassembler::empty() const { return _ok_pos == 0; }
+```
+
+#### 一些边界条件
+
+1. 当读到的数据包的eof标志为true时，不代表一定eof了，可能在转载进入缓冲区时丢弃部分信息导致eof没有进入缓冲区（详细可看stream_reassembler.cc的46行）。
+2. 同样把字符串装载如缓冲区时要考虑丢弃部分信息的情况，frist_unassembled的偏移不一定是你插入字符串片段的长度（详细可看stream_reassembler.cc的37和39行）。
+
+
+
+我们接着可以来讲讲这个图：
+
+![](img-lab1\lab1-img-2.png)
+
+从Lab1来理解这张图我们可以把绿色的部分理解为我们在Lab0实现的缓冲区，红色的部分理解为我们在Lab1实现的流重组器中的那个小根堆。这样看其实很多实现方面的细节其实我们都可以想得到。我个人觉得Lab0提供的接口还不太完备，Lab0还能通过更加完备的接口，来完全封装这个流缓冲区。
