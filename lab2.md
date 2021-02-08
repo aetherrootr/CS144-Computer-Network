@@ -57,6 +57,28 @@ TCP是一种协议，它通过不可靠的数据报可靠地传送一对流控�
 
  该图显示了TCP中涉及的三种不同类型的索引编制:
 
+| 序列号（Sequence Number） | 绝对序列号（Absolute Sequence j） | 流索引（Stream Indices） |
+| ------------------------- | --------------------------------- | ------------------------ |
+| 从ISN开始                 | 从0开始                           | 从0开始                  |
+| 包括SYN / FIN             | 包括SYN / FIN                     | 省略SYN / FIN            |
+| 循环的32位数              | 不循环的64位数                    | 不循环的64位数           |
+| “seqno”                   | “absolute seqno”                  | “stream index”           |
 
+在绝对序列号和流索引之间进行转换很容易——只需加减一即可。 不幸的是，在序列号和绝对序列号之间进行转换会比较困难，并且将两者混淆会产生棘手的错误。 为了系统地防止这些错误，我们将使用自定义类型表示序列号：`WrappingInt32`，并编写它与绝对序列号之间的转换（以`uint64_t`表示）。`WrappingInt32`是包装类型的示例：包含内部类型的类型（在这种情况下为`uint32_t`） 但提供一组不同的功能/运算符。
 
+我们已经为您定义了类型，并提供了一些帮助函数（请参阅wrwringintegers.hh），但是您将在wrappingintegers.cc中实现转换：
+
+1. ```c++
+   WrappingInt32 wrap(uint64t n, WrappingInt32 isn)
+   ```
+
+   `转换 absolute seqno → seqno`。给一个绝对序列号(n)和初始序列号（isn），转换为n的（相对）序列号。
+
+2. ```c++
+   uint64_t unwrap(WrappingInt32 n, WrappingInt32 isn, uint64_t checkpoint)
+   ```
+
+   `转换seqno → absolute seqno`。给定序列号（n），初始序列号（isn）和绝对检查点序列号，请计算与检查点最接近的与n对应的绝对序列号。
+
+   注意：因为任何给定的seqno对应于许多绝对seqnos，所以需要一个检查点。 例如。 如果ISN为零，则seqno“ 17”对应于17的绝对seqno，但也对应232 17或233 17或234 17，等等。检查点有助于解决歧义：这是用户的绝对seqno 类知道是“在球场”的正确答案。 在这里，“在球场上”可以表示在正确答案的±231以内的任何64位数字。 在TCP实施中，您将使用最后重组的字节的索引作为检查点。
 
