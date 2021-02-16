@@ -80,5 +80,86 @@ TCP是一种协议，它通过不可靠的数据报可靠地传送一对流控�
 
    `转换seqno → absolute seqno`。给定序列号（n），初始序列号（isn）和绝对检查点序列号，请计算与检查点最接近的与n对应的绝对序列号。
 
-   注意：因为任何给定的seqno对应于许多绝对seqnos，所以需要一个检查点。 例如。 如果ISN为零，则seqno“ 17”对应于17的绝对seqno，但也对应232 17或233 17或234 17，等等。检查点有助于解决歧义：这是用户的绝对seqno 类知道是“在球场”的正确答案。 在这里，“在球场上”可以表示在正确答案的±231以内的任何64位数字。 在TCP实施中，您将使用最后重组的字节的索引作为检查点。
+   注意：因为任何给定的seqno对应了许多绝对seqno，所以我们需要一个检查点来确定一个seqno来对应那一个绝对seqno。 例如，如果ISN为零，则seqno $“17”$ 对应的绝对seqno是$17$，但也对应$2^{32}+17$或$2^{33}+17$或$2^{34}+17$，等等。检查点有助于消除歧义：这是一个绝对的seqno，这个类的用户知道正确答案的“大概范围”。在这里，“大概范围”可以是指任何64位的数字是正确答案的$\pm 2^{31}$。在TCP实现中，您将使用最后一个重新组装的字节的索引作为检查点。
+   
+   **提示**：*最干净/最简单的实现将使用wrapping_integers.hh中提供的帮助程序功能。 包装/展开操作应保留偏移量——两个相差17的seqno将对应于两个相差17的绝对seqno。*
 
+您可以通过运行WrappingInt32测试来测试您的实现。 在build目录中，执行`ctest -R wrap`。
+
+#### Implementing the TCP receiver
+
+恭喜你正确完成了wrap和unwrap逻辑！ 如果可以的话，我们可以握手。 在本实验的其余部分，您将实现TCPReceiver。 它将（1）从其对等方接收分段，（2）使用你的StreamReassembler重新组装ByteStream，（3）计算确认号（ackno）和窗口大小。 确认和窗口大小最终将在传出段中发送回对等方。
+
+首先，请检查TCP段的格式。 这是两个端点相互发送的消息；它是较低级数据报的有效负载。 下图中非灰色的的字段表示我们在本Lab中感兴趣的信息：序列号，有效负载以及SYN和FIN标志。 这些是由发送方写入，由接收方读取并使用的字段。
+
+![](img-lab2\lab2-img-2.png)
+
+TCPSegment类用C ++表示此消息。 请查看TCPSegment（https://cs144.github.io/doc/lab2/classtcpsegment.html）和TCPHeader（https://cs144.github.io/doc/lab2/structtcpheader.html）的文档。 您可能对[length_in_sequencespace()](https://cs144.github.io/doc/lab2/class_t_c_p_segment.html#a41eb3ff25fee485849fd38eb31c990d6)方法很感兴趣，该方法计算一个字段占用了多少序列号（包括SYN和FIN标志每个都占用一个序列号以及有效载荷的每个字节这一事实）。
+
+接下来，让我们讨论一下TCPReceiver将提供的接口：
+
+```c++
+// 构造一个“ TCPReceiver”，它将最多存储“ capacity”字节。
+TCPReceiver(const size_t capacity); // 在.hh文件中实现
+
+// 处理收到的TCP段
+void segment_received(const TCPSegment &seg);
+
+// ackno应发送给对等方的确认
+//
+// 如果未收到SYN，则返回空
+//
+// 这是接收者窗口的开始，换句话说，这是接收者尚未接收到的流中第一个字节的序列号。
+std::optional<WrappingInt32> ackno() const;
+
+// 窗口大小应该发送给对等方
+//
+// 形式上：这是接收者愿意接受的可接受索引的窗口大小。 
+// 它是``第一个未组装''和``第一个不可接受''索引之间的距离。
+//
+// 换句话说：它是容量减去TCPReceiver在字节流中保留的字节数。
+size_t window_size() const;
+
+// 已存储但尚未重新组合的字节数
+size_t unassembled_bytes() const;// 在.hh文件中实现
+
+// 访问重组的字节流
+ByteStream &stream_out();// 在.hh文件中实现
+```
+
+TCPReceiveris围绕你的StreamReassembler构建。 我们已经在.hh文件中为您实现了构造函数以及未组装的字节和流输出方法。 你接下来需要实现以下模块：
+
+##### segment_received()
+
+这是主要的工作方法。每次从对等方收到新的段时，都会调用`TCPReceiver::segment_received()`。
+
+此方法需要：
+
+- **如有必要，设置初始序列号。**具有SYN标志组第一到达的分段的序列号是初始序列号。 您需要跟踪它，为了保持32位 wrap seqnos之间转换。
+- **将任何数据或流结束标记推送到StreamReassembler。**如果在TCPSegment的标头中设置了FIN标志，则表示有效负载的最后一个字节是整个流的最后一个字节。 请记住，StreamReassembler期望流索引从零开始。 您将必须unwrap seqnos才能产生这些。
+
+##### ackno()
+
+返回一个`optional<WrappingInt32>`，其中包含接收者尚不知道的第一个字节的序列号。 这是窗口的左边缘：接收方对将要接收的第一个字节有兴趣。 如果尚未设置ISN，请返回一个空的可选内容。
+
+##### window_size()
+
+返回“第一个未汇编的”索引（对应于ackno的索引）和“第一个不可接受的”索引之间的距离。
+
+---
+
+### volution of theTCPReceiverover the life of the connection
+
+在TCP连接过程中，我们的TCPReceiver会经历一系列状态：从等待SYN（带有空ackno）到正在进行的流，再到完成的流，这意味着输入已在ByteStream上结束。 测试套件将检查您的TCPReceiver是否正确处理了传入的TCPSegments，并通过这些状态进行了扩展，如下所示。 （在实验4之前，您不必担心错误状态或RST标志。）
+
+![](img-lab2\lab2-img-3.png)
+
+---
+
+### Development and debugging advice
+
+1. 在文件tcpreceiver.cc中添加TCPReceiver的公共接口（以及您想要的任何私有方法或功能）。 您可以将任何你需要的的私有成员添加到intcpreceiver.hh中的TCPReceiver类里。
+2. 编译后，您可以使用`make check_lab2`测试您的代码
+3. 请努力使您的代码对要对其样式进行评级的CA可读。请对变量使用合理且清晰的命名约定。 使用注释来解释复杂或微妙的代码段。 使用“防御性编程”-明确检查函数或不变量的前提条件，如果遇到任何错误，则引发异常。 在设计中使用模块化-识别常见的抽象和行为，并在可能的情况下将它们排除在外。 重复的代码和巨大的功能模块将会使你的代码难以阅读。
+4. 还请保持Lab 0文档中描述的“现代C ++”风格。 cppreference网站（https://en.cppreference.com）是一个很好的资源，尽管您不需要C ++的任何复杂功能即可进行这些实验。 （有时您可能需要使用move()函数来传递无法复制的对象。）
+5. 如果您遇到段错误，那么确实出现了问题！ 我们希望您以一种安全的方式进行编程，来减少段错误的出现频率。（不要使用 malloc（），new，指针。并且在不确定的地方抛出异常的安全检查等）。 也就是说，要进行调试，您可以使用`cmake .. -DCMAKEBUILDTYPE = RelASan`配置构建目录，使编译器的“sanitizers”能够检测到内存错误和未定义的行为，并在发生错误时为您提供很好的诊断。。 您也可以使用**valgrind**工具。 您还可以配置`cmake .. -DCMAKEBUILDTYPE = Debug`并使用GNU调试器（gdb）。 但是请记住，这些选项（尤其是sanitizers”）会减慢编译和执行的速度！
